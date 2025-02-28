@@ -1,12 +1,11 @@
 import argparse
 import numpy as np
 import os
+from tqdm import tqdm
 
 import MAS_library as MASL
 import Pk_library as PKL
 import g3read
-
-import ipdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--box', default='Box1a', type=str)
@@ -21,6 +20,9 @@ def get_mass_cube(delta, ptype):
 	pos = []
 	mass = []
 
+	shot_noise_num = 0
+	shot_noise_denom = 0
+
 	for i in range(f.header.num_files):
 		this_file = snap_path + str(i)
 
@@ -30,20 +32,24 @@ def get_mass_cube(delta, ptype):
 			if this in [0, 1, 4, 2]:
 				mass = np.array(g3read.read_new(this_file, ['MASS'], [this])[this]['MASS']*1e10)
 
-			elif this==5:
+			elif this == 5:
 				try:
 					mass = np.array(g3read.read_new(this_file, ['BHMA'], [this])[this]['BHMA']*1e10)
-				except:
+				except FileNotFoundError:
 					print(f'Block BHMA not found in file {i}')
 
+			shot_noise_num += np.sum(mass)
+			shot_noise_denom += np.sum(mass**2)
+
 			pos, mass = pos.astype('float32'), mass.astype('float32')
-
 			MASL.MA(pos, delta, BoxSize, MAS, W=mass, verbose=verbose)
-            
 
-		print(i)
+	Neff = shot_noise_num**2/shot_noise_denom  # Effective number of particles
+	return Neff
 
-if __name__== '__main__': 
+
+
+if __name__== '__main__':
 	args = parser.parse_args()
 
 	sim_box = args.box
@@ -73,22 +79,36 @@ if __name__== '__main__':
 	threads = threads
 	axis = 0
 
+	# Initialise the density field
 	delta = np.zeros((grid,grid,grid), dtype=np.float32)
-	
+
 	if 'dm' not in sim_name:
 		get_mass_cube(delta, [0, 1, 4, 5])
 
 	else:
 		if 'dm_hr' in sim_name:
-			get_mass_cube(delta, [1])
+			Neff = get_mass_cube(delta, [1])
 
 		else:
-			get_mass_cube(delta, [1, 2])
+			Neff = get_mass_cube(delta, [1, 2])
 
 	delta /= np.mean(delta, dtype=np.float64)
 	delta -= 1.0
 
-
+	shot_noise = BoxSize**3/Neff
 	Pk = PKL.Pk(delta, BoxSize, axis, MAS, verbose)
 
-	np.savetxt(f'../../magneticum-data/data/Pylians/Pk_matter/{sim_box}/Pk_{sim_name}_z={z:.2f}_R{grid}.txt', np.column_stack((Pk.k3D, Pk.Pk[:, 0])), delimiter='\t')
+	header = f'''Power spectrum of the matter density field in the Magneticum simulation {sim_name} at redshift z={z:.2f}.
+	The columns are: k [h/Mpc], Pk [Mpc^3/h^3](sim_name, z)
+	Shot noise (not subtracted): {shot_noise}'''
+
+	# Save Pk
+	save_dir = f'../../magneticum-data/data/Pylians/Pk_matter/{sim_box}/'
+	if not os.path.exists(save_dir): os.makedirs(save_dir)
+	np.savetxt(f'{save_dir}/Pk_{sim_name}_z={z:.2f}_R{grid}.txt',
+               np.column_stack((Pk.k3D, Pk.Pk[:, 0])), delimiter='\t', header=header)
+
+	# Save delta
+	cube_save_dir = f'../../cube/{sim_box}/delta_matter/'
+	if not os.path.exists(cube_save_dir): os.makedirs(cube_save_dir)
+	np.save(f'{cube_save_dir}/delta_matter_{sim_name}_z={z:.2f}_R{grid}.npy', delta, allow_pickle=False)
