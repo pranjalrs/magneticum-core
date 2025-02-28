@@ -6,6 +6,7 @@ from tqdm import tqdm
 import MAS_library as MASL
 import Pk_library as PKL
 import g3read
+from multiprocessing import Pool
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--box', default='Box1a', type=str)
@@ -24,8 +25,10 @@ def get_mass_cube(delta, ptype, fold):
 	shot_noise_num = 0
 	shot_noise_denom = 0
 
-	for i in range(f.header.num_files):
+	def process_file(i):
 		this_file = snap_path + str(i)
+		local_shot_noise_num = 0
+		local_shot_noise_denom = 0
 
 		for this in ptype:
 			pos = np.array(g3read.read_new(this_file, ['POS '], [this])[this]['POS ']*1e-3)/fold
@@ -38,12 +41,25 @@ def get_mass_cube(delta, ptype, fold):
 					mass = np.array(g3read.read_new(this_file, ['BHMA'], [this])[this]['BHMA']*1e10)
 				except FileNotFoundError:
 					print(f'Block BHMA not found in file {i}')
+					continue
 
-			shot_noise_num += np.sum(mass)
-			shot_noise_denom += np.sum(mass**2)
+			local_shot_noise_num += np.sum(mass)
+			local_shot_noise_denom += np.sum(mass**2)
 
 			pos, mass = pos.astype('float32'), mass.astype('float32')
 			MASL.MA(pos, delta, BoxSize, MAS, W=mass, verbose=verbose)
+
+		return local_shot_noise_num, local_shot_noise_denom
+
+	if args.threads > 1:
+		with Pool as pool:
+			results = pool.map(process_file, range(f.header.num_files))
+	else:
+		results = [process_file(i) for i in range(f.header.num_files)]
+
+	for local_shot_noise_num, local_shot_noise_denom in results:
+		shot_noise_num += local_shot_noise_num
+		shot_noise_denom += local_shot_noise_denom
 
 	Neff = shot_noise_num**2/shot_noise_denom  # Effective number of particles
 	return Neff
