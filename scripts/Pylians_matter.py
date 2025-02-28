@@ -13,10 +13,11 @@ parser.add_argument('--sim', default='mr_bao', type=str)
 parser.add_argument('--snap_dir', default='144', type=str)
 parser.add_argument('--grid', default=1024, type=int)
 parser.add_argument('--MAS', type=str)
+parser.add_argument('--fold', default=1, type=int)
 parser.add_argument('--threads', default=1, type=int)
 
 
-def get_mass_cube(delta, ptype):
+def get_mass_cube(delta, ptype, fold):
 	pos = []
 	mass = []
 
@@ -27,7 +28,7 @@ def get_mass_cube(delta, ptype):
 		this_file = snap_path + str(i)
 
 		for this in ptype:
-			pos = np.array(g3read.read_new(this_file, ['POS '], [this])[this]['POS ']*1e-3)
+			pos = np.array(g3read.read_new(this_file, ['POS '], [this])[this]['POS ']*1e-3)/fold
 
 			if this in [0, 1, 4, 2]:
 				mass = np.array(g3read.read_new(this_file, ['MASS'], [this])[this]['MASS']*1e10)
@@ -71,8 +72,9 @@ if __name__== '__main__':
 	f = g3read.GadgetFile(snap_path+'0')
 
 	# density field parameters
+	fold = args.fold
 	grid    = grid   #the 3D field will have grid x grid x grid voxels
-	BoxSize = f.header.BoxSize/1e3 #Mpc/h ; size of box
+	BoxSize = f.header.BoxSize/1e3/fold #Mpc/h ; size of box
 	z = f.header.redshift
 	MAS     = args.MAS  #mass-assigment scheme
 	verbose = True   #print information on progress
@@ -83,14 +85,14 @@ if __name__== '__main__':
 	delta = np.zeros((grid,grid,grid), dtype=np.float32)
 
 	if 'dm' not in sim_name:
-		get_mass_cube(delta, [0, 1, 4, 5])
+		get_mass_cube(delta, [0, 1, 4, 5], fold)
 
 	else:
 		if 'dm_hr' in sim_name:
-			Neff = get_mass_cube(delta, [1])
+			Neff = get_mass_cube(delta, [1], fold)
 
 		else:
-			Neff = get_mass_cube(delta, [1, 2])
+			Neff = get_mass_cube(delta, [1, 2], fold)
 
 	delta /= np.mean(delta, dtype=np.float64)
 	delta -= 1.0
@@ -100,15 +102,17 @@ if __name__== '__main__':
 
 	header = f'''Power spectrum of the matter density field in the Magneticum simulation {sim_name} at redshift z={z:.2f}.
 	The columns are: k [h/Mpc], Pk [Mpc^3/h^3](sim_name, z)
-	Shot noise (not subtracted): {shot_noise}'''
+	Shot noise (not subtracted): {shot_noise}
+	Fold: {fold} (Box size and particle positions are scaled by 1/fold)
+	'''
 
 	# Save Pk
 	save_dir = f'../../magneticum-data/data/Pylians/Pk_matter/{sim_box}/'
 	if not os.path.exists(save_dir): os.makedirs(save_dir)
-	np.savetxt(f'{save_dir}/Pk_{sim_name}_z={z:.2f}_R{grid}.txt',
+	np.savetxt(f'{save_dir}/Pk_{sim_name}_z={z:.2f}_R{grid}_fold_{fold}.txt',
                np.column_stack((Pk.k3D, Pk.Pk[:, 0])), delimiter='\t', header=header)
 
 	# Save delta
 	cube_save_dir = f'../../cube/{sim_box}/delta_matter/'
 	if not os.path.exists(cube_save_dir): os.makedirs(cube_save_dir)
-	np.save(f'{cube_save_dir}/delta_matter_{sim_name}_z={z:.2f}_R{grid}.npy', delta, allow_pickle=False)
+	np.save(f'{cube_save_dir}/delta_matter_{sim_name}_z={z:.2f}_R{grid}_fold_{fold}.npy', delta, allow_pickle=False)
