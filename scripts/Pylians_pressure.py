@@ -78,7 +78,7 @@ def get_Pe_Mead_cube(Pe_cube, little_h, fold, ptype=0):
 
 	mean_mass = total_mass/grid**3
 	shot_noise_pressure = shot_noise_pressure * BoxSize**3/(grid**3)**2
-	short_noise_matter_pressure = short_noise_matter_pressure/mean_mass * BoxSize**3/(grid**3)
+	short_noise_matter_pressure = short_noise_matter_pressure/mean_mass * BoxSize**3/(grid**3)**2
 
 	return shot_noise_pressure, short_noise_matter_pressure
 
