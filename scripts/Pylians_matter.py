@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import os
+import sys
 from tqdm import tqdm
 
 import MAS_library as MASL
@@ -50,10 +51,11 @@ def get_mass_cube(delta, ptype, fold):
 			MASL.MA(pos, delta, BoxSize, MAS, W=mass, verbose=verbose)
 
 		return local_shot_noise_num, local_shot_noise_denom
+		print(i)
 
 	if args.threads > 1:
-		with Pool as pool:
-			results = pool.map(process_file, range(f.header.num_files))
+		with Pool() as pool:
+			results = pool.imap(process_file, range(f.header.num_files))
 	else:
 		results = [process_file(i) for i in range(f.header.num_files)]
 
@@ -101,7 +103,7 @@ if __name__== '__main__':
 	delta = np.zeros((grid,grid,grid), dtype=np.float32)
 
 	if 'dm' not in sim_name:
-		get_mass_cube(delta, [0, 1, 4, 5], fold)
+		Neff = get_mass_cube(delta, [0, 1, 4, 5], fold)
 
 	else:
 		if 'dm_hr' in sim_name:

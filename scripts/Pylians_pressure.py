@@ -2,15 +2,13 @@ import argparse
 import numpy as np
 import os
 
+import astropy.cosmology.units as cu
 import astropy.units as u
 import MAS_library as MASL
 import Pk_library as PKL
 import g3read
 
-import sys
-sys.path.append('../core/')
-
-import Pk_tools
+from dawn import Pk_tools
 
 
 parser = argparse.ArgumentParser()
@@ -53,7 +51,7 @@ def get_Pe_Mead_cube(Pe_cube, little_h, ptype=0):
 		print(i)
 
 def get_ne_Mead_cube(ne_cube, little_h, ptype=0):
-	cell_volume = (BoxSize*u.Mpc/grid)**3
+	cell_volume = (BoxSize*u.Mpc/cu.littleh/grid)**3
 	for i in range(f.header.num_files):
 		this_snap = g3read.GadgetFile(snap_path + str(i))
 		Pe = Pk_tools.get_field(ptype, this_snap, 'ne_Mead', little_h, cell_volume)
@@ -109,10 +107,10 @@ if __name__ == '__main__':
 		del norm
 
 	elif field == 'Pe_Mead':
-		get_Pe_Mead_cube(Pe_cube, z=redshift, little_h=little_h)
+		get_Pe_Mead_cube(Pe_cube, little_h=little_h)
 
 	elif field == 'ne_Mead':
-		get_ne_Mead_cube(Pe_cube, z=redshift, little_h=little_h)
+		get_ne_Mead_cube(Pe_cube, little_h=little_h)
 
 	if save_cube is True:
 		#np.save(f'/xdisk/timeifler/pranjalrs/cube/{sim_box}_{Pe_field}_{MAS}_R{grid}.npy', Pe_cube)
@@ -125,4 +123,4 @@ if __name__ == '__main__':
 			np.savetxt(f'../../../magneticum-data/data/Pylians/Pk_pressure/{box}/{field}_R{grid}_z={redshift:.4f}.txt', np.column_stack((Pk.k3D, Pk.Pk[:,0])), delimiter='\t')
 
 		elif 'ne' in field:
-			np.savetxt(f'../../../magneticum-data/data/Pylians/Pk_ne/{box}/{field}_R{grid}_z={redshift:.4f}.txt', np.column_stack((Pk.k3D, Pk.Pk[:,0])), delimiter='\t')
+			np.savetxt(f'../../magneticum-data/data/Pylians/Pk_electron_density/{box}/{field}_R{grid}_z={redshift:.4f}.txt', np.column_stack((Pk.k3D, Pk.Pk[:,0])), delimiter='\t')
